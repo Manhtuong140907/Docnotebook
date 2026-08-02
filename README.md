@@ -84,6 +84,19 @@ Có thể triển khai Node.js project này lên Render, Railway, Fly.io hoặc 
 thư mục khác mà không bị mất giao diện. Khi chưa có API key, giao diện tự chuyển sang
 OCR cục bộ để người dùng vẫn có thể sử dụng ngay.
 
+### Triển khai Vercel
+
+Repository đã có `api/index.js` và `vercel.json`; khi import vào Vercel, giữ Root
+Directory ở thư mục gốc và Framework Preset là **Other**. Thêm các Environment Variables:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL=gpt-5.6`
+- `TRUST_PROXY=1`
+
+Không đặt `PORT` trên Vercel. Ảnh gửi tới API được trình duyệt thu nhỏ và nén dưới
+4 MB để phù hợp giới hạn payload của Vercel Functions. OCR cục bộ vẫn cần Internet
+để tải Tesseract.js và dữ liệu ngôn ngữ từ CDN.
+
 ## Cấu trúc
 
 ```text

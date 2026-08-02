@@ -37,7 +37,7 @@ const allowedMimeTypes = new Set([
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 15 * 1024 * 1024,
+    fileSize: 4 * 1024 * 1024,
     files: 2
   },
   fileFilter: (_req, file, callback) => {
@@ -189,7 +189,7 @@ Hãy đọc toàn bộ nội dung trong ảnh. Mục tiêu là bản chép đán
 
       const openai = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
-        timeout: 120_000,
+        timeout: 55_000,
         maxRetries: 2
       });
 
@@ -236,7 +236,7 @@ app.use((error, _req, res, _next) => {
     return res.status(400).json({
       error:
         error.code === "LIMIT_FILE_SIZE"
-          ? "Ảnh vượt quá giới hạn 15 MB."
+          ? "Ảnh xử lý vượt quá giới hạn 4 MB của Vercel."
           : `Lỗi tải ảnh: ${error.message}`
     });
   }

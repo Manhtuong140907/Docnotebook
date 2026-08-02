@@ -5,3 +5,4 @@ npm-debug.log*
 .tools/
 /ai-handwriting-ocr/
 /ai-handwriting-ocr-completed.zip
+.vercel/
