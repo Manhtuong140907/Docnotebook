@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Handwriting OCR</title>
+  <meta
+    name="description"
+    content="Đọc chữ viết tay tiếng Việt từ ảnh bằng OCR cục bộ và AI Vision."
+  />
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: rgba(255, 255, 255, .94);
+      --text: #162033;
+      --muted: #667085;
+      --line: #dbe3ef;
+      --primary: #335cff;
+      --primary-dark: #2548db;
+      --purple: #7c3aed;
+      --success: #067647;
+      --warning-bg: #fffaeb;
+      --warning-line: #fedf89;
+      --danger: #d92d20;
+      --radius: 20px;
+      --shadow: 0 18px 55px rgba(33, 64, 154, .10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 0 0, #dbeafe, transparent 35%),
+        radial-gradient(circle at 100% 0, #ede9fe, transparent 32%),
+        var(--bg);
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    .wrap {
+      width: min(1220px, calc(100% - 30px));
+      margin: 0 auto;
+      padding: 28px 0 52px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      width: 54px;
+      height: 54px;
+      border-radius: 17px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 26px;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(27px, 4vw, 41px);
+      line-height: 1.07;
+      letter-spacing: -.035em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .server-status {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.8);
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .server-status.online {
+      color: var(--success);
+      border-color: #abefc6;
+      background: #ecfdf3;
+    }
+
+    .server-status.offline {
+      color: var(--danger);
+      border-color: #fecdca;
+      background: #fef3f2;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 20px;
+    }
+
+    .card {
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.9);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(15px);
+    }
+
+    .card-head {
+      padding: 19px 21px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .card-head h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+
+    .card-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .card-body { padding: 20px 21px 22px; }
+
+    .drop-zone {
+      min-height: 310px;
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      cursor: pointer;
+      border: 2px dashed #a8b8d6;
+      border-radius: 18px;
+      background: linear-gradient(145deg, #f8fbff, #f7f5ff);
+      transition: .2s ease;
+    }
+
+    .drop-zone.drag {
+      border-color: var(--primary);
+      background: #eff4ff;
+      transform: translateY(-2px);
+    }
+
+    .drop-zone.has-image {
+      padding: 0;
+      border-style: solid;
+      background: #111827;
+    }
+
+    .empty-icon { font-size: 46px; margin-bottom: 10px; }
+    .empty-title { display: block; font-weight: 800; margin-bottom: 6px; }
+    .empty-note { color: var(--muted); font-size: 13px; }
+
+    #preview {
+      display: none;
+      width: 100%;
+      max-height: 560px;
+      object-fit: contain;
+    }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .range-row {
+      display: grid;
+      grid-template-columns: 105px 1fr 50px;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 16px;
+    }
+
+    button, .file-button {
+      min-height: 42px;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      cursor: pointer;
+      border: 0;
+      border-radius: 12px;
+      font-weight: 750;
+      font-size: 14px;
+      transition: .18s ease;
+    }
+
+    button:hover, .file-button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .primary {
+      color: white;
+      background: var(--primary);
+    }
+
+    .primary:hover { background: var(--primary-dark); }
+
+    .ai-button {
+      color: white;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+    }
+
+    .secondary {
+      color: var(--text);
+      background: #eef2f8;
+    }
+
+    .danger {
+      color: var(--danger);
+      background: #fff1f0;
+    }
+
+    .file-button {
+      color: #3730a3;
+      background: #eef2ff;
+    }
+
+    #fileInput { display: none; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 13px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      color: #344054;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .field.full { grid-column: 1 / -1; }
+
+    select, input[type="text"], textarea {
+      width: 100%;
+      outline: 0;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcfe;
+    }
+
+    select, input[type="text"] { padding: 11px 12px; }
+
+    textarea {
+      min-height: 105px;
+      padding: 13px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    textarea:focus, select:focus, input[type="text"]:focus {
+      border-color: #84adff;
+      box-shadow: 0 0 0 4px #eff4ff;
+    }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 5px;
+      margin-bottom: 15px;
+      border-radius: 14px;
+      background: #eef2f8;
+    }
+
+    .tab {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .tab.active {
+      color: var(--text);
+      background: white;
+      box-shadow: 0 4px 14px rgba(16,24,40,.08);
+    }
+
+    .action-button {
+      width: 100%;
+      min-height: 48px;
+      font-size: 15px;
+    }
+
+    .privacy-note {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .progress-wrap {
+      display: none;
+      margin: 14px 0;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .progress {
+      height: 9px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e7edf6;
+    }
+
+    .progress-bar {
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--purple));
+      transition: width .25s ease;
+    }
+
+    .result-tabs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      margin: 17px 0 10px;
+      padding-bottom: 2px;
+    }
+
+    .result-tab {
+      min-height: 36px;
+      padding: 8px 11px;
+      white-space: nowrap;
+      background: #eef2f8;
+      color: var(--muted);
+    }
+
+    .result-tab.active {
+      color: white;
+      background: var(--primary);
+    }
+
+    .result-panel { display: none; }
+    .result-panel.active { display: block; }
+
+    #transcription, #normalized {
+      min-height: 330px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 14px;
+    }
+
+    .empty-result {
+      padding: 28px 14px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .data-table th, .data-table td {
+      padding: 10px 9px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .data-table th { color: var(--muted); font-size: 12px; }
+
+    .uncertain-card {
+      padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fbfcfe;
+    }
+
+    .uncertain-card strong { display: block; margin-bottom: 5px; }
+    .uncertain-card p { margin: 4px 0; color: var(--muted); font-size: 13px; }
+
+    .notice {
+      padding: 15px 17px;
+      margin-top: 20px;
+      border: 1px solid var(--warning-line);
+      border-radius: 15px;
+      color: #7a4d00;
+      background: var(--warning-bg);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 100;
+      left: 50%;
+      bottom: 22px;
+      padding: 11px 15px;
+      opacity: 0;
+      color: white;
+      pointer-events: none;
+      border-radius: 12px;
+      background: #101828;
+      box-shadow: 0 15px 40px rgba(0,0,0,.22);
+      transform: translate(-50%, 20px);
+      transition: .2s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    canvas { display: none; }
+
+    @media (max-width: 900px) {
+      header { flex-direction: column; }
+      .grid { grid-template-columns: 1fr; }
+      .server-status { white-space: normal; }
+    }
+
+    @media (max-width: 560px) {
+      .wrap { width: min(100% - 18px, 1220px); padding-top: 18px; }
+      .card-head, .card-body { padding-left: 15px; padding-right: 15px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .field.full { grid-column: auto; }
+      .range-row { grid-template-columns: 88px 1fr 43px; }
+      .toolbar > * { flex: 1 1 135px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">✍️</div>
+        <div>
+          <h1>AI đọc chữ viết tay</h1>
+          <p class="subtitle">
+            Kết hợp OCR miễn phí và AI Vision để đọc ghi chú tiếng Việt của nhiều kiểu chữ khác nhau.
+          </p>
+        </div>
+      </div>
+      <div class="server-status" id="serverStatus">Đang kiểm tra máy chủ...</div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <div class="card-head">
+          <h2>1. Ảnh tài liệu</h2>
+          <p>Chụp vuông góc, đủ sáng và tránh để ngón tay che chữ.</p>
+        </div>
+        <div class="card-body">
+          <div class="drop-zone" id="dropZone" tabindex="0">
+            <div id="emptyState">
+              <div class="empty-icon">🖼️</div>
+              <span class="empty-title">Thả hoặc chọn ảnh</span>
+              <span class="empty-note">JPG, PNG, WEBP; tối đa 15 MB</span>
+            </div>
+            <img id="preview" alt="Xem trước ảnh tài liệu" />
+          </div>
+
+          <div class="controls">
+            <div class="range-row">
+              <span>Độ sáng</span>
+              <input id="brightness" type="range" min="50" max="180" value="105" />
+              <output id="brightnessOut">105%</output>
+            </div>
+            <div class="range-row">
+              <span>Tương phản</span>
+              <input id="contrast" type="range" min="50" max="220" value="135" />
+              <output id="contrastOut">135%</output>
+            </div>
+            <div class="range-row">
+              <span>Trắng đen</span>
+              <input id="threshold" type="range" min="0" max="255" value="0" />
+              <output id="thresholdOut">Tắt</output>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <label class="file-button" for="fileInput">📁 Chọn ảnh</label>
+            <input
+              id="fileInput"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              capture="environment"
+            />
+            <button class="secondary" id="autoBtn" disabled>✨ Tự cải thiện</button>
+            <button class="danger" id="clearImageBtn" disabled>🗑️ Xóa ảnh</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>2. Nhận dạng nội dung</h2>
+          <p>AI phù hợp hơn với chữ viết tay; OCR cục bộ phù hợp hơn với chữ in rõ.</p>
+        </div>
+        <div class="card-body">
+          <div class="mode-tabs">
+            <button class="tab active" data-mode="ai">✨ AI chữ viết tay</button>
+            <button class="tab" data-mode="local">🔒 OCR cục bộ</button>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              Loại tài liệu
+              <select id="documentType">
+                <option value="notes">Ghi chú / sổ tay</option>
+                <option value="receipt">Thu chi / hóa đơn</option>
+                <option value="form">Biểu mẫu</option>
+                <option value="classroom">Bài học / bài làm</option>
+                <option value="general">Tài liệu chung</option>
+              </select>
+            </label>
+
+            <label class="field">
+              Ngôn ngữ dự kiến
+              <input
+                id="languageHint"
+                type="text"
+                value="Tiếng Việt, có thể xen tiếng Anh"
+                maxlength="80"
+              />
+            </label>
+
+            <label class="field full">
+              Gợi ý ngữ cảnh <span style="font-weight:500;color:var(--muted)">(không bắt buộc)</span>
+              <textarea
+                id="contextHint"
+                maxlength="1500"
+                placeholder="Ví dụ: Đây là sổ ghi chuyến xe; có các địa danh Thanh Hóa, Bắc Giang, Cửa Lò và các khoản tiền bằng đồng."
+              ></textarea>
+            </label>
+          </div>
+
+          <button class="ai-button action-button" id="readBtn" disabled>
+            ✨ Đọc bằng AI
+          </button>
+          <div class="privacy-note" id="privacyNote">
+            Chế độ AI gửi ảnh tới máy chủ của bạn rồi gọi OpenAI API. API key chỉ nằm trong file .env ở máy chủ.
+          </div>
+
+          <div class="progress-wrap" id="progressWrap">
+            <div class="progress-info">
+              <span id="statusText">Đang chuẩn bị...</span>
+              <span id="progressText">0%</span>
+            </div>
+            <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+          </div>
+
+          <div class="result-tabs">
+            <button class="result-tab active" data-result="transcriptionPanel">Nguyên văn</button>
+            <button class="result-tab" data-result="normalizedPanel">Chuẩn hóa</button>
+            <button class="result-tab" data-result="itemsPanel">Dữ liệu</button>
+            <button class="result-tab" data-result="uncertainPanel">Chưa chắc</button>
+          </div>
+
+          <div class="result-panel active" id="transcriptionPanel">
+            <textarea
+              id="transcription"
+              placeholder="Bản chép nguyên văn sẽ xuất hiện ở đây..."
+            ></textarea>
+          </div>
+
+          <div class="result-panel" id="normalizedPanel">
+            <textarea
+              id="normalized"
+              placeholder="Bản văn bản đã chuẩn hóa sẽ xuất hiện ở đây..."
+            ></textarea>
+          </div>
+
+          <div class="result-panel" id="itemsPanel">
+            <div class="empty-result" id="itemsEmpty">Chưa có dữ liệu được trích xuất.</div>
+            <table class="data-table" id="itemsTable" hidden>
+              <thead><tr><th>Trường</th><th>Giá trị</th></tr></thead>
+              <tbody id="itemsBody"></tbody>
+            </table>
+          </div>
+
+          <div class="result-panel" id="uncertainPanel">
+            <div class="empty-result" id="uncertainEmpty">Chưa có đoạn chữ không chắc chắn.</div>
+            <div id="uncertainList"></div>
+          </div>
+
+          <div class="toolbar">
+            <button class="secondary" id="copyBtn">📋 Sao chép</button>
+            <button class="secondary" id="txtBtn">⬇️ TXT</button>
+            <button class="secondary" id="jsonBtn">⬇️ JSON</button>
+            <button class="danger" id="clearResultBtn">Xóa kết quả</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="notice">
+      <strong>Để tăng độ chính xác:</strong> giữ ảnh gốc có độ phân giải cao, nhập vài tên riêng hoặc địa danh có thể xuất hiện vào ô “Gợi ý ngữ cảnh”, và luôn kiểm tra lại số tiền, số điện thoại, biển số hoặc dữ liệu quan trọng. AI vẫn có thể đọc nhầm hoặc suy đoán sai ở phần chữ quá mờ.
+    </div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    const els = {
+      serverStatus: $("serverStatus"),
+      dropZone: $("dropZone"),
+      emptyState: $("emptyState"),
+      preview: $("preview"),
+      fileInput: $("fileInput"),
+      brightness: $("brightness"),
+      contrast: $("contrast"),
+      threshold: $("threshold"),
+      brightnessOut: $("brightnessOut"),
+      contrastOut: $("contrastOut"),
+      thresholdOut: $("thresholdOut"),
+      autoBtn: $("autoBtn"),
+      clearImageBtn: $("clearImageBtn"),
+      documentType: $("documentType"),
+      languageHint: $("languageHint"),
+      contextHint: $("contextHint"),
+      readBtn: $("readBtn"),
+      privacyNote: $("privacyNote"),
+      progressWrap: $("progressWrap"),
+      statusText: $("statusText"),
+      progressText: $("progressText"),
+      progressBar: $("progressBar"),
+      transcription: $("transcription"),
+      normalized: $("normalized"),
+      itemsEmpty: $("itemsEmpty"),
+      itemsTable: $("itemsTable"),
+      itemsBody: $("itemsBody"),
+      uncertainEmpty: $("uncertainEmpty"),
+      uncertainList: $("uncertainList"),
+      copyBtn: $("copyBtn"),
+      txtBtn: $("txtBtn"),
+      jsonBtn: $("jsonBtn"),
+      clearResultBtn: $("clearResultBtn"),
+      canvas: $("canvas"),
+      toast: $("toast")
+    };
+
+    let sourceFile = null;
+    let imageObject = null;
+    let mode = "ai";
+    let busy = false;
+    let resultData = null;
+    let progressTimer = null;
+
+    function showToast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(showToast.timer);
+      showToast.timer = setTimeout(() => els.toast.classList.remove("show"), 2300);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function setProgress(percent, status) {
+      els.progressWrap.style.display = "block";
+      els.progressBar.style.width = `${percent}%`;
+      els.progressText.textContent = `${Math.round(percent)}%`;
+      if (status) els.statusText.textContent = status;
+    }
+
+    function startFakeProgress() {
+      clearInterval(progressTimer);
+      let value = 7;
+      setProgress(value, "AI đang đối chiếu nét chữ...");
+      progressTimer = setInterval(() => {
+        value = Math.min(92, value + Math.max(1, (92 - value) * .07));
+        const status =
+          value < 35 ? "Đang tải và kiểm tra ảnh..." :
+          value < 65 ? "Đang đọc chữ viết tay..." :
+          "Đang kiểm tra lại tên, số và xuống dòng...";
+        setProgress(value, status);
+      }, 500);
+    }
+
+    function stopProgress(success = true) {
+      clearInterval(progressTimer);
+      if (success) setProgress(100, "Hoàn tất");
+    }
+
+    function updateImageFilter() {
+      const brightness = els.brightness.value;
+      const contrast = els.contrast.value;
+      const threshold = Number(els.threshold.value);
+
+      els.preview.style.filter = threshold > 0
+        ? `brightness(${brightness}%) contrast(${contrast}%) grayscale(100%)`
+        : `brightness(${brightness}%) contrast(${contrast}%)`;
+
+      els.brightnessOut.textContent = `${brightness}%`;
+      els.contrastOut.textContent = `${contrast}%`;
+      els.thresholdOut.textContent = threshold ? threshold : "Tắt";
+    }
+
+    function setImage(file) {
+      if (!file || !file.type.startsWith("image/")) {
+        showToast("Vui lòng chọn đúng tệp hình ảnh.");
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        showToast("Ảnh vượt quá giới hạn 15 MB.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          sourceFile = file;
+          imageObject = img;
+          els.preview.src = reader.result;
+          els.preview.style.display = "block";
+          els.emptyState.style.display = "none";
+          els.dropZone.classList.add("has-image");
+          els.readBtn.disabled = false;
+          els.autoBtn.disabled = false;
+          els.clearImageBtn.disabled = false;
+          updateImageFilter();
+          showToast("Đã tải ảnh.");
+        };
+        img.onerror = () => showToast("Không thể đọc ảnh này.");
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearImage() {
+      sourceFile = null;
+      imageObject = null;
+      els.preview.removeAttribute("src");
+      els.preview.style.display = "none";
+      els.emptyState.style.display = "";
+      els.dropZone.classList.remove("has-image");
+      els.fileInput.value = "";
+      els.readBtn.disabled = true;
+      els.autoBtn.disabled = true;
+      els.clearImageBtn.disabled = true;
+      els.brightness.value = 105;
+      els.contrast.value = 135;
+      els.threshold.value = 0;
+      updateImageFilter();
+    }
+
+    function drawProcessedCanvas() {
+      if (!imageObject) throw new Error("Chưa có ảnh.");
+
+      const maxSide = 3000;
+      const scale = Math.min(
+        1,
+        maxSide / Math.max(imageObject.naturalWidth, imageObject.naturalHeight)
+      );
+      const width = Math.max(1, Math.round(imageObject.naturalWidth * scale));
+      const height = Math.max(1, Math.round(imageObject.naturalHeight * scale));
+
+      els.canvas.width = width;
+      els.canvas.height = height;
+
+      const ctx = els.canvas.getContext("2d", { willReadFrequently: true });
+      ctx.filter = `brightness(${els.brightness.value}%) contrast(${els.contrast.value}%)`;
+      ctx.drawImage(imageObject, 0, 0, width, height);
+      ctx.filter = "none";
+
+      const threshold = Number(els.threshold.value);
+      if (threshold > 0) {
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const gray = .299 * data[i] + .587 * data[i + 1] + .114 * data[i + 2];
+          const value = gray >= threshold ? 255 : 0;
+          data[i] = value;
+          data[i + 1] = value;
+          data[i + 2] = value;
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+
+      return els.canvas;
+    }
+
+    function canvasToBlob(canvas, type = "image/jpeg", quality = .92) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(
+          blob => blob ? resolve(blob) : reject(new Error("Không tạo được ảnh xử lý.")),
+          type,
+          quality
+        );
+      });
+    }
+
+    function renderStructuredResult(result) {
+      resultData = result;
+      els.transcription.value = result.transcription || "";
+      els.normalized.value = result.normalized_text || "";
+
+      const items = Array.isArray(result.detected_items) ? result.detected_items : [];
+      els.itemsBody.innerHTML = items.map(item => `
+        <tr>
+          <td>${escapeHtml(item.label)}</td>
+          <td>${escapeHtml(item.value)}</td>
+        </tr>
+      `).join("");
+      els.itemsEmpty.hidden = items.length > 0;
+      els.itemsTable.hidden = items.length === 0;
+
+      const uncertain = Array.isArray(result.uncertain_fragments)
+        ? result.uncertain_fragments
+        : [];
+
+      els.uncertainList.innerHTML = uncertain.map(item => `
+        <div class="uncertain-card">
+          <strong>${escapeHtml(item.fragment || "[không rõ]")}</strong>
+          <p><b>Vị trí:</b> ${escapeHtml(item.location || "Không xác định")}</p>
+          <p><b>Khả năng:</b> ${escapeHtml((item.alternatives || []).join(" / ") || "Không có")}</p>
+          <p><b>Lý do:</b> ${escapeHtml(item.reason || "Nét chữ không rõ")}</p>
+        </div>
+      `).join("");
+      els.uncertainEmpty.hidden = uncertain.length > 0;
+
+      if (result.notes) {
+        els.normalized.value += `\n\n--- Ghi chú AI ---\n${result.notes}`;
+      }
+    }
+
+    function clearResults() {
+      resultData = null;
+      els.transcription.value = "";
+      els.normalized.value = "";
+      els.itemsBody.innerHTML = "";
+      els.itemsEmpty.hidden = false;
+      els.itemsTable.hidden = true;
+      els.uncertainList.innerHTML = "";
+      els.uncertainEmpty.hidden = false;
+    }
+
+    async function readWithAI() {
+      const processedBlob = await canvasToBlob(drawProcessedCanvas());
+      const form = new FormData();
+
+      form.append("image", sourceFile, sourceFile.name || "document.jpg");
+      form.append("processedImage", processedBlob, "document-enhanced.jpg");
+      form.append("documentType", els.documentType.value);
+      form.append("languageHint", els.languageHint.value);
+      form.append("contextHint", els.contextHint.value);
+
+      startFakeProgress();
+
+      const response = await fetch("/api/ocr-ai", {
+        method: "POST",
+        body: form
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error || "Không thể đọc ảnh bằng AI.");
+      }
+
+      renderStructuredResult(payload.result);
+      stopProgress(true);
+      showToast(`Đã đọc xong bằng ${payload.model}.`);
+    }
+
+    async function readWithLocalOCR() {
+      if (!window.Tesseract) {
+        throw new Error("Không tải được Tesseract.js. Hãy kiểm tra kết nối Internet.");
+      }
+
+      const canvas = drawProcessedCanvas();
+      resultData = null;
+
+      const response = await Tesseract.recognize(canvas, "vie+eng", {
+        logger: message => {
+          const progress = Math.round((message.progress || 0) * 100);
+          const labels = {
+            "loading tesseract core": "Đang tải lõi OCR...",
+            "initializing tesseract": "Đang khởi tạo...",
+            "loading language traineddata": "Đang tải tiếng Việt...",
+            "initializing api": "Đang chuẩn bị...",
+            "recognizing text": "Đang nhận dạng chữ..."
+          };
+          setProgress(progress, labels[message.status] || message.status || "Đang xử lý...");
+        },
+        tessedit_pageseg_mode: "6",
+        preserve_interword_spaces: "1"
+      });
+
+      const text = (response.data.text || "").trim();
+      els.transcription.value = text;
+      els.normalized.value = text;
+      stopProgress(true);
+      showToast(text ? "OCR cục bộ đã hoàn tất." : "Không tìm thấy chữ rõ ràng.");
+    }
+
+    async function handleRead() {
+      if (!sourceFile || busy) return;
+
+      busy = true;
+      els.readBtn.disabled = true;
+      clearResults();
+
+      try {
+        if (mode === "ai") {
+          await readWithAI();
+        } else {
+          await readWithLocalOCR();
+        }
+      } catch (error) {
+        console.error(error);
+        clearInterval(progressTimer);
+        els.statusText.textContent = "Có lỗi xảy ra";
+        showToast(error.message || "Không thể xử lý ảnh.");
+      } finally {
+        busy = false;
+        els.readBtn.disabled = !sourceFile;
+      }
+    }
+
+    function setMode(nextMode) {
+      mode = nextMode;
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.mode === mode);
+      });
+
+      if (mode === "ai") {
+        els.readBtn.className = "ai-button action-button";
+        els.readBtn.textContent = "✨ Đọc bằng AI";
+        els.privacyNote.textContent =
+          "Chế độ AI gửi ảnh tới máy chủ của bạn rồi gọi OpenAI API. API key chỉ nằm trong file .env ở máy chủ.";
+      } else {
+        els.readBtn.className = "primary action-button";
+        els.readBtn.textContent = "🔎 OCR miễn phí trên máy";
+        els.privacyNote.textContent =
+          "Chế độ cục bộ xử lý ảnh trong trình duyệt nhưng thường kém chính xác hơn với chữ viết tay.";
+      }
+    }
+
+    function currentText() {
+      const activePanel = document.querySelector(".result-panel.active");
+      if (activePanel?.id === "normalizedPanel") return els.normalized.value;
+      return els.transcription.value;
+    }
+
+    function download(content, filename, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function checkServer() {
+      try {
+        const response = await fetch("/api/health");
+        const data = await response.json();
+
+        if (!data.aiConfigured) {
+          els.serverStatus.textContent = "⚠️ Chưa cấu hình API key";
+          els.serverStatus.className = "server-status offline";
+          return;
+        }
+
+        els.serverStatus.textContent = `● AI sẵn sàng · ${data.model}`;
+        els.serverStatus.className = "server-status online";
+      } catch {
+        els.serverStatus.textContent = "● Chỉ dùng được OCR cục bộ";
+        els.serverStatus.className = "server-status offline";
+      }
+    }
+
+    els.dropZone.addEventListener("click", () => els.fileInput.click());
+    els.dropZone.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") els.fileInput.click();
+    });
+    els.fileInput.addEventListener("change", event => setImage(event.target.files[0]));
+
+    ["dragenter", "dragover"].forEach(type => {
+      els.dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        els.dropZone.classList.add("drag");
+      });
+    });
+
+    ["dragleave", "drop"].forEach(type => {
+      els.dropZone.addEventListener(type, event => {
+        event.preventDefault();
+        els.dropZone.classList.remove("drag");
+      });
+    });
+
+    els.dropZone.addEventListener("drop", event => setImage(event.dataTransfer.files[0]));
+
+    document.addEventListener("paste", event => {
+      const item = [...(event.clipboardData?.items || [])]
+        .find(entry => entry.type.startsWith("image/"));
+      if (item) setImage(item.getAsFile());
+    });
+
+    [els.brightness, els.contrast, els.threshold].forEach(input => {
+      input.addEventListener("input", updateImageFilter);
+    });
+
+    els.autoBtn.addEventListener("click", () => {
+      els.brightness.value = 112;
+      els.contrast.value = 165;
+      els.threshold.value = 0;
+      updateImageFilter();
+      showToast("Đã tăng độ rõ của ảnh.");
+    });
+
+    els.clearImageBtn.addEventListener("click", clearImage);
+    els.readBtn.addEventListener("click", handleRead);
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => setMode(tab.dataset.mode));
+    });
+
+    document.querySelectorAll(".result-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".result-tab").forEach(item => item.classList.remove("active"));
+        document.querySelectorAll(".result-panel").forEach(panel => panel.classList.remove("active"));
+        tab.classList.add("active");
+        $(tab.dataset.result).classList.add("active");
+      });
+    });
+
+    els.copyBtn.addEventListener("click", async () => {
+      const text = currentText().trim();
+      if (!text) return showToast("Chưa có nội dung để sao chép.");
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const textarea = document.querySelector(".result-panel.active textarea");
+        if (textarea) {
+          textarea.select();
+          document.execCommand("copy");
+        }
+      }
+      showToast("Đã sao chép.");
+    });
+
+    els.txtBtn.addEventListener("click", () => {
+      const text = currentText().trim();
+      if (!text) return showToast("Chưa có nội dung để tải.");
+      const base = (sourceFile?.name || "ket-qua").replace(/\.[^.]+$/, "");
+      download(text, `${base}-ocr.txt`, "text/plain;charset=utf-8");
+    });
+
+    els.jsonBtn.addEventListener("click", () => {
+      const transcription = els.transcription.value.trim();
+      if (!transcription) return showToast("Chưa có nội dung để tải.");
+
+      const payload = resultData || {
+        transcription,
+        normalized_text: els.normalized.value,
+        detected_items: [],
+        uncertain_fragments: [],
+        notes: "Kết quả từ OCR cục bộ."
+      };
+      const base = (sourceFile?.name || "ket-qua").replace(/\.[^.]+$/, "");
+      download(
+        JSON.stringify(payload, null, 2),
+        `${base}-ocr.json`,
+        "application/json;charset=utf-8"
+      );
+    });
+
+    els.clearResultBtn.addEventListener("click", clearResults);
+
+    updateImageFilter();
+    setMode("ai");
+    checkServer();
+  </script>
+</body>
+</html>
