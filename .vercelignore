@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.tools
+.vercel
+ai-handwriting-ocr
+ai-handwriting-ocr-completed.zip
+node_modules
+test
+index.html
+README.md

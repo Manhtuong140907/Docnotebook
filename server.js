@@ -5,13 +5,16 @@ import multer from "multer";
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 app.disable("x-powered-by");
-app.set("trust proxy", 1);
-app.use(express.static("public"));
+if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
+app.use(express.static(path.join(rootDir, "public")));
 app.use(express.json({ limit: "1mb" }));
 
 const aiLimiter = rateLimit({
@@ -34,7 +37,7 @@ const allowedMimeTypes = new Set([
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 15 * 1024 * 1024,
+    fileSize: 4 * 1024 * 1024,
     files: 2
   },
   fileFilter: (_req, file, callback) => {
@@ -94,6 +97,13 @@ function buildDocumentGuidance(documentType) {
   return guidance[documentType] || guidance.general;
 }
 
+const OCRRequest = z.object({
+  documentType: z.enum(["notes", "receipt", "form", "classroom", "general"])
+    .catch("general"),
+  contextHint: z.string().max(1500).catch(""),
+  languageHint: z.string().max(80).catch("Tiếng Việt, có thể xen tiếng Anh")
+});
+
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -125,10 +135,12 @@ app.post(
         return res.status(400).json({ error: "Bạn chưa gửi ảnh cần đọc." });
       }
 
-      const documentType = safeText(req.body.documentType, 30) || "general";
-      const contextHint = safeText(req.body.contextHint, 1500);
-      const languageHint =
-        safeText(req.body.languageHint, 80) || "Tiếng Việt, có thể xen tiếng Anh";
+      const input = OCRRequest.parse({
+        documentType: safeText(req.body.documentType, 30) || "general",
+        contextHint: safeText(req.body.contextHint, 1500),
+        languageHint: safeText(req.body.languageHint, 80) || "Tiếng Việt, có thể xen tiếng Anh"
+      });
+      const { documentType, contextHint, languageHint } = input;
       const model = process.env.OPENAI_MODEL || "gpt-5.6";
 
       const developerPrompt = `
@@ -175,7 +187,11 @@ Hãy đọc toàn bộ nội dung trong ảnh. Mục tiêu là bản chép đán
         });
       }
 
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+        timeout: 55_000,
+        maxRetries: 2
+      });
 
       const response = await openai.responses.parse({
         model,
@@ -220,7 +236,7 @@ app.use((error, _req, res, _next) => {
     return res.status(400).json({
       error:
         error.code === "LIMIT_FILE_SIZE"
-          ? "Ảnh vượt quá giới hạn 15 MB."
+          ? "Ảnh xử lý vượt quá giới hạn 4 MB của Vercel."
           : `Lỗi tải ảnh: ${error.message}`
     });
   }
@@ -237,12 +253,18 @@ app.use((error, _req, res, _next) => {
     });
   }
 
+  if (error?.name === "APIConnectionTimeoutError") {
+    return res.status(504).json({
+      error: "AI xử lý quá lâu. Hãy thử lại với ảnh nhỏ hoặc rõ hơn."
+    });
+  }
+
   res.status(500).json({
     error: error?.message || "Có lỗi không xác định khi xử lý ảnh."
   });
 });
 
-if (!process.env.VERCEL) {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   app.listen(port, () => {
     console.log(`AI Handwriting OCR đang chạy tại http://localhost:${port}`);
   });

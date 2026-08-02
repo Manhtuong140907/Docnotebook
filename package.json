@@ -6,7 +6,9 @@
   "description": "Web OCR kết hợp Tesseract.js và OpenAI Vision để đọc chữ viết tay tiếng Việt.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check": "node --check server.js",
+    "test": "node --test test/server.test.js test/vercel.test.js"
   },
   "engines": {
     "node": ">=20"

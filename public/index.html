@@ -690,6 +690,7 @@
     let busy = false;
     let resultData = null;
     let progressTimer = null;
+    const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
     function showToast(message) {
       els.toast.textContent = message;
@@ -748,8 +749,8 @@
     }
 
     function setImage(file) {
-      if (!file || !file.type.startsWith("image/")) {
-        showToast("Vui lòng chọn đúng tệp hình ảnh.");
+      if (!file || !supportedImageTypes.has(file.type)) {
+        showToast("Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.");
         return;
       }
       if (file.size > 15 * 1024 * 1024) {
@@ -799,7 +800,7 @@
     function drawProcessedCanvas() {
       if (!imageObject) throw new Error("Chưa có ảnh.");
 
-      const maxSide = 3000;
+      const maxSide = 2200;
       const scale = Math.min(
         1,
         maxSide / Math.max(imageObject.naturalWidth, imageObject.naturalHeight)
@@ -841,6 +842,24 @@
           quality
         );
       });
+    }
+
+    async function createAIImage() {
+      const canvas = drawProcessedCanvas();
+      const maxBytes = 4 * 1024 * 1024;
+      let quality = .84;
+      let blob = await canvasToBlob(canvas, "image/jpeg", quality);
+
+      while (blob.size > maxBytes && quality > .55) {
+        quality -= .08;
+        blob = await canvasToBlob(canvas, "image/jpeg", quality);
+      }
+
+      if (blob.size > maxBytes) {
+        throw new Error("Ảnh quá phức tạp để gửi qua Vercel. Hãy cắt ảnh thành phần nhỏ hơn.");
+      }
+
+      return blob;
     }
 
     function renderStructuredResult(result) {
@@ -889,21 +908,33 @@
     }
 
     async function readWithAI() {
-      const processedBlob = await canvasToBlob(drawProcessedCanvas());
+      const processedBlob = await createAIImage();
       const form = new FormData();
 
-      form.append("image", sourceFile, sourceFile.name || "document.jpg");
-      form.append("processedImage", processedBlob, "document-enhanced.jpg");
+      form.append("image", processedBlob, "document-optimized.jpg");
       form.append("documentType", els.documentType.value);
       form.append("languageHint", els.languageHint.value);
       form.append("contextHint", els.contextHint.value);
 
       startFakeProgress();
 
-      const response = await fetch("/api/ocr-ai", {
-        method: "POST",
-        body: form
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 60_000);
+      let response;
+      try {
+        response = await fetch("/api/ocr-ai", {
+          method: "POST",
+          body: form,
+          signal: controller.signal
+        });
+      } catch (error) {
+        if (error.name === "AbortError") {
+          throw new Error("Yêu cầu quá thời gian chờ. Hãy thử ảnh nhỏ hoặc rõ hơn.");
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
 
       const payload = await response.json().catch(() => ({}));
 
@@ -953,6 +984,7 @@
       busy = true;
       els.readBtn.disabled = true;
       clearResults();
+      setProgress(0, "Đang chuẩn bị...");
 
       try {
         if (mode === "ai") {
@@ -964,6 +996,8 @@
         console.error(error);
         clearInterval(progressTimer);
         els.statusText.textContent = "Có lỗi xảy ra";
+        els.progressBar.style.width = "0%";
+        els.progressText.textContent = "0%";
         showToast(error.message || "Không thể xử lý ảnh.");
       } finally {
         busy = false;
@@ -1014,6 +1048,7 @@
         if (!data.aiConfigured) {
           els.serverStatus.textContent = "⚠️ Chưa cấu hình API key";
           els.serverStatus.className = "server-status offline";
+          setMode("local");
           return;
         }
 
