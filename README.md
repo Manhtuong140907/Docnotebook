@@ -51,6 +51,13 @@ Mở trình duyệt tại:
 http://localhost:3000
 ```
 
+Kiểm tra nhanh mã nguồn và endpoint:
+
+```bash
+npm run check
+npm test
+```
+
 ## Cách dùng
 
 1. Chọn hoặc chụp ảnh.
@@ -71,6 +78,11 @@ Có thể triển khai Node.js project này lên Render, Railway, Fly.io hoặc 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - `PORT` thường được nền tảng tự cấp
+- `TRUST_PROXY=1` nếu ứng dụng chạy sau reverse proxy tin cậy; để `0` khi chạy trực tiếp
+
+Ứng dụng dùng đường dẫn tuyệt đối tới thư mục `public`, vì vậy có thể khởi động từ
+thư mục khác mà không bị mất giao diện. Khi chưa có API key, giao diện tự chuyển sang
+OCR cục bộ để người dùng vẫn có thể sử dụng ngay.
 
 ## Cấu trúc
 
@@ -78,6 +90,8 @@ Có thể triển khai Node.js project này lên Render, Railway, Fly.io hoặc 
 ai-handwriting-ocr/
 ├─ public/
 │  └─ index.html
+├─ test/
+│  └─ server.test.js
 ├─ .env.example
 ├─ .gitignore
 ├─ package.json

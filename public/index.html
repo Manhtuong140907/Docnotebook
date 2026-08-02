@@ -690,6 +690,7 @@
     let busy = false;
     let resultData = null;
     let progressTimer = null;
+    const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
     function showToast(message) {
       els.toast.textContent = message;
@@ -748,8 +749,8 @@
     }
 
     function setImage(file) {
-      if (!file || !file.type.startsWith("image/")) {
-        showToast("Vui lòng chọn đúng tệp hình ảnh.");
+      if (!file || !supportedImageTypes.has(file.type)) {
+        showToast("Chỉ hỗ trợ ảnh JPG, PNG, WEBP hoặc GIF.");
         return;
       }
       if (file.size > 15 * 1024 * 1024) {
@@ -900,10 +901,23 @@
 
       startFakeProgress();
 
-      const response = await fetch("/api/ocr-ai", {
-        method: "POST",
-        body: form
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 130_000);
+      let response;
+      try {
+        response = await fetch("/api/ocr-ai", {
+          method: "POST",
+          body: form,
+          signal: controller.signal
+        });
+      } catch (error) {
+        if (error.name === "AbortError") {
+          throw new Error("Yêu cầu quá thời gian chờ. Hãy thử ảnh nhỏ hoặc rõ hơn.");
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
 
       const payload = await response.json().catch(() => ({}));
 
@@ -953,6 +967,7 @@
       busy = true;
       els.readBtn.disabled = true;
       clearResults();
+      setProgress(0, "Đang chuẩn bị...");
 
       try {
         if (mode === "ai") {
@@ -964,6 +979,8 @@
         console.error(error);
         clearInterval(progressTimer);
         els.statusText.textContent = "Có lỗi xảy ra";
+        els.progressBar.style.width = "0%";
+        els.progressText.textContent = "0%";
         showToast(error.message || "Không thể xử lý ảnh.");
       } finally {
         busy = false;
@@ -1014,6 +1031,7 @@
         if (!data.aiConfigured) {
           els.serverStatus.textContent = "⚠️ Chưa cấu hình API key";
           els.serverStatus.className = "server-status offline";
+          setMode("local");
           return;
         }
 
